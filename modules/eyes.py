@@ -1,34 +1,46 @@
 from droidrun import DroidAgent
 import subprocess
-import os
+import io
+from PIL import Image
 
 class ScreenEyes:
     def __init__(self, agent: DroidAgent):
         self.agent = agent
 
-    async def scan(self):
+    def capture_screenshot(self):
         """
-        Captures screen text using Raw ADB.
+        Captures screen strictly to RAM via ADB pipe.
+        Stealth Mode: No file is created on the Android device.
         """
         try:
-            # Dump UI hierarchy
-            subprocess.run("adb shell uiautomator dump /sdcard/window_dump.xml", shell=True, timeout=5, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-            # Read the text
-            result = subprocess.check_output("adb shell cat /sdcard/window_dump.xml", shell=True).decode('utf-8')
-            return result.lower()
-        except Exception:
-            # If dump fails, return empty string
-            return ""
+            # 'exec-out' writes binary to stdout, skipping file storage
+            result = subprocess.run(
+                ["adb", "exec-out", "screencap", "-p"], 
+                capture_output=True,
+                timeout=6  # Increased slightly for high-res screens
+            )
+            
+            if result.returncode == 0 and result.stdout:
+                image_data = io.BytesIO(result.stdout)
+                image = Image.open(image_data)
+                # Resize to speed up upload to Gemini (stealthier bandwidth usage)
+                image.thumbnail((1024, 1024)) 
+                return image
+            return None
+        except subprocess.TimeoutExpired:
+            print("⚠️ Camera Timeout (Phone busy or ADB disconnected)")
+            return None
+        except Exception as e:
+            print(f"❌ Camera Error: {e}")
+            return None
 
     def get_current_app_component(self):
         """
-        Finds the active package/activity.
+        Fast, lightweight check for the active app package.
         """
         try:
             cmd = "adb shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'"
-            result = subprocess.check_output(cmd, shell=True).decode('utf-8')
-            
-            # Parse output: "mCurrentFocus=Window{... u0 com.package/activity ...}"
+            result = subprocess.check_output(cmd, shell=True, timeout=2).decode('utf-8')
             if "/" in result:
                 tokens = result.split()
                 for token in tokens:
@@ -37,14 +49,3 @@ class ScreenEyes:
             return None
         except Exception:
             return None
-
-    def detects_distraction(self, screen_text, triggers):
-        """
-        Simple keyword search.
-        """
-        if not screen_text:
-            return None
-        for trigger in triggers:
-            if trigger.lower() in screen_text:
-                return trigger
-        return None

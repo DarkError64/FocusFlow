@@ -1,49 +1,62 @@
-from llama_index.llms.google_genai import GoogleGenAI
+import google.generativeai as genai
 from .config import Config
+import traceback
 
 class AcademicBrain:
     def __init__(self):
-        self.llm = GoogleGenAI(
-            model=Config.MODEL_NAME, 
-            api_key=Config.API_KEY,
-            temperature=0.0 # Zero creativity = Strict rules
-        )
+        genai.configure(api_key=Config.API_KEY)
+        # Uses the model defined in Config, default to 1.5-flash if missing
+        model_name = getattr(Config, 'MODEL_NAME', 'gemini-1.5-flash')
+        self.model = genai.GenerativeModel(model_name)
 
-    async def judge_content(self, screen_text):
-        """
-        Asks Gemini: Is the MAIN CONTENT relevant?
-        """
+    async def judge_image(self, image_input):
+        if image_input is None:
+            return False
+
+        # We inject the goal, but we wrap it in a "Broad Academic" context.
         prompt = (
-            f"USER GOAL: {Config.CURRENT_GOAL}\n"
-            f"SCREEN CONTEXT: {screen_text}\n\n"
-            "ROLE: You are a Strict Productivity Police Officer.\n\n"
-            "CONTEXT (YOUTUBE MODE):\n"
-            "The screen contains a Main Video (Active) and Recommended Videos (Sidebar).\n"
-            "You must detect if the MAIN VIDEO is a distraction.\n\n"
-            "🚨 IMMEDIATE BAN (SAY 'NO') IF YOU SEE:\n"
-            "1. GAMING TERMS: 'Gameplay', 'Walkthrough', 'Let\'s Play', 'Live Stream', 'Ranked', 'Boss Fight', 'Minecraft', 'Roblox', 'PUBG', 'Clash', 'Valorant', 'GTA'.\n"
-            "2. ENTERTAINMENT: 'Prank', 'Reaction', 'Vlog', 'Challenge', 'Highlights', 'Movie Scene', 'Trailer'.\n"
-            "3. MUSIC: 'Official Video', 'Lyrics', 'Music Video'.\n"
-            "4. If the text is mostly empty/short but contains 'Level', 'XP', 'Ammo', 'Map' -> It is a game -> SAY 'NO'.\n\n"
-            "✅ PASS (SAY 'YES') ONLY IF:\n"
-            "1. You see explicit educational keywords: 'Lecture', 'Tutorial', 'Course', 'Python', 'Math', 'Physics', 'History', 'Documentary'.\n"
-            "2. The screen is JUST System UI (e.g., 'Home', 'Search', 'Library', 'Settings') with NO gaming terms.\n\n"
-            "⚡ THE GOLDEN RULE:\n"
-            "- If you see 'Calculus' AND 'Minecraft' on screen -> ASK YOURSELF: Is 'Minecraft' the title? If unsure, but 'Calculus' is present, say YES (Safe).\n"
-            "- If you see 'Minecraft' and NO educational words -> SAY NO (Distraction).\n"
-            "- If you are watching Gameplay, the verdict MUST be NO.\n\n"
-            "VERDICT (Answer strictly with one word: YES or NO):"
+            f"CURRENT USER GOAL: '{Config.USER_GOAL}'\n\n"
+            
+            "--- 🎓 ACADEMIC MONITOR INSTRUCTIONS ---\n"
+            "You are a strict but intelligent study supervisor. Your job is to classify the user's screen activity.\n"
+            "The User's Goal above indicates their **Subject of Study**, but their **Method of Study** is dynamic.\n\n"
+            
+            "✅ VERDICT: PRODUCTIVE (Allow these)\n"
+            "1. **Any Learning Format**: The user might switch from a Video Lecture to a PDF, a Slide Deck, a Wikipedia article, or a documentation site. This is NORMAL.\n"
+            "2. **Tools & Reference**: Code Editors (VS Code), Terminals, Calculators, Excel, StackOverflow, GeeksForGeeks, or University Portals.\n"
+            "3. **General Organization**: File Explorer, Calendar, or Note-taking apps (Notion, Obsidian).\n"
+            "4. **Subject Relevance**: If the goal is 'Physics', a PDF about 'Math' is arguably still productive. Give the benefit of the doubt for *any* academic text.\n\n"
+
+            "⛔ VERDICT: DISTRACTION (Block these)\n"
+            "1. **Entertainment**: Netflix, Prime Video, Anime sites, Cartoons, Movies.\n"
+            "2. **Social Media**: Instagram Reels, TikTok, Twitter/X Feeds, Facebook, Discord Chat (unless clearly technical).\n"
+            "3. **Gaming**: Any game visuals, HUDs, Steam store, Twitch streams.\n"
+            "4. **Off-Topic Video**: If the user is on YouTube, look at the video title. If it is Music Videos, Vlogs, Gaming, or Gossip -> DISTRACTION. (Educational YouTube is OK).\n\n"
+            
+            "--- 🧠 DECISION LOGIC ---\n"
+            "- Does the screen look like work/study (text-heavy, diagrams, code)? -> PRODUCTIVE\n"
+            "- Does the screen look like fun (colorful thumbnails, infinite scroll, chat bubbles)? -> DISTRACTION\n"
+            "- IGNORE format mismatches. If the goal says 'Watch Video' but they are reading a 'PDF', that is PRODUCTIVE.\n\n"
+
+            "OUTPUT STRICTLY ONE WORD: 'DISTRACTION' or 'PRODUCTIVE'"
         )
         
         try:
-            response = await self.llm.acomplete(prompt)
-            verdict = response.text.strip().upper()
+            # Generate response
+            response = self.model.generate_content([prompt, image_input])
             
-            print(f"      [🧠 AI Thought: {verdict}]")
+            if not response.text:
+                print(" [⚠️ Brain Error: Empty Response]")
+                return False
+
+            verdict_text = response.text.strip().upper()
             
-            # Logic: If AI says "NO", it means NOT PRODUCTIVE -> Distraction.
-            return "NO" in verdict 
+            # Debug output (Visible to you)
+            print(f" [👁️ AI Verdict: {verdict_text}]", end="")
+            
+            # Return True only if clearly distracted
+            return "DISTRACTION" in verdict_text
             
         except Exception as e:
-            print(f"⚠️ Brain Freeze: {e}")
+            print(f"\n❌ BRAIN FAILURE: {e}")
             return False
