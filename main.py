@@ -13,15 +13,27 @@ from modules.enforcer import PoliceOfficer
 from modules.resource_manager import ResourceManager
 
 async def main():
-    print(f"--- 🛡️ Focus-Flow Pro: Vision Edition ---")
+    print(f"\n--- 🛡️ Focus-Flow Pro: Agent Edition ---")
     
-    # 1. SETUP
-    print("\n" + "="*50)
-    user_input = input("👉 Enter Task (e.g. 'Study Computer Architecture'): ")
-    if user_input.strip(): Config.USER_GOAL = user_input
-    print(f"✅ GOAL LOCKED: {Config.USER_GOAL}")
+    # --- 1. SESSION SETUP ---
+    print("="*50)
+    
+    # 2. HARDCODED GOAL (No user input requested)
+    Config.USER_GOAL = "Studying"
+    print(f"👉 Task Auto-Set : {Config.USER_GOAL}")
+    
+    print("\n👮 ACCOUNTABILITY SETUP")
+    contact_name = input("👉 Enter Contact Name : ").strip()
+    
+    if contact_name:
+        Config.RECIPIENT_NAME = contact_name
+        print(f"✅ Snitch Target Set: '{Config.RECIPIENT_NAME}'")
+    else:
+        print("⚠️ No name entered. Social penalties disabled.")
+            
     print("="*50 + "\n")
 
+    # Initialize Agents
     droid_config = DroidrunConfig(
         agent=AgentConfig(max_steps=10000), 
         device=DeviceConfig(platform="android")
@@ -34,19 +46,16 @@ async def main():
 
     # --- 🔎 SYSTEM CHECK ---
     print("🛠️  PERFORMING SYSTEM CHECK...")
-    test_shot = eyes.capture_screenshot()
+    test_shot = await eyes.capture_screenshot()
     if test_shot:
-        print("📸 Camera: ONLINE")
         print("🧠 Connecting to Brain...")
-        is_distracted = await brain.judge_image(test_shot)
-        verdict = "DISTRACTION" if is_distracted else "PRODUCTIVE"
-        print(f"✅ System Check Complete. Initial Verdict: {verdict}")
+        await brain.judge_image(test_shot) 
+        print(f"✅ System Ready.")
         test_shot.close()
     else:
         print("❌ CRITICAL: Camera Failed. Check ADB Connection.")
-    print("   (Monitoring started. Printing '.' for every scan)")
+    print("   (Monitoring started...)")
     print("-" * 50)
-    # -----------------------
 
     strike_counter = 0
     last_smart_check = 0
@@ -62,8 +71,7 @@ async def main():
                 if safe_app in current_package:
                     is_in_safe_zone = True
                     break
-        
-        # Simple Package Ban Check
+
         wrong_app_detected = False
         if current_package:
             for ban_keyword in Config.BANNED_APPS_KEYWORDS:
@@ -75,14 +83,13 @@ async def main():
         just_punished = False
 
         if wrong_app_detected:
-            # --- FIXED: LOGIC ALREADY EXISTED HERE ---
-            print(f"\n🚨 BANNED APP: {wrong_app_detected}")
             strike_counter += 1
+            print(f"⚠️ STRIKE {strike_counter}/{Config.MAX_STRIKES}")
             if strike_counter >= Config.MAX_STRIKES:
-                await police.play_penalty_gif()
+                await police.play_penalty_gif() 
                 strike_counter = 0
             else:
-                await police.hard_correction()
+                await police.soft_correction()
             just_punished = True
             
         elif not is_in_safe_zone and current_package != "" and "launcher" not in current_package:
@@ -90,35 +97,29 @@ async def main():
 
         # B. VISION CHECK
         if not just_punished and (time.time() - last_smart_check > Config.POLLING_RATE_SMART):
-            
             print(".", end="", flush=True) 
-            
-            screenshot = eyes.capture_screenshot()
+            screenshot = await eyes.capture_screenshot()
             
             if screenshot:
                 is_distracted = await brain.judge_image(screenshot)
-                
                 if is_distracted:
-                    print("\n⛔ VISION VERDICT: DISTRACTION DETECTED.")
+                    print("⛔ VISION VERDICT: DISTRACTION DETECTED.")
                     strike_counter += 1
+                    print(f"⚠️ STRIKE {strike_counter}/{Config.MAX_STRIKES}")
                     
-                    # --- FIXED: ADDED MAX STRIKE CHECK HERE ---
                     if strike_counter >= Config.MAX_STRIKES:
                         await police.play_penalty_gif()
                         strike_counter = 0
                     else:
                         await police.force_reset()
-                    # ------------------------------------------
                     
                     just_punished = True
-                
                 screenshot.close()
-            
             last_smart_check = time.time()
 
         if just_punished:
-            print("\n🛡️  GRACE PERIOD: 5 seconds...")
-            await asyncio.sleep(5)
+            print("\n🛡️  GRACE PERIOD: 8 seconds...")
+            await asyncio.sleep(8)
             print("👀 Resuming watch.\n")
             continue
 

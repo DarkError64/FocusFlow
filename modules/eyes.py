@@ -1,5 +1,6 @@
+# modules/eyes.py
 from droidrun import DroidAgent
-import subprocess
+import asyncio
 import io
 from PIL import Image
 
@@ -7,40 +8,58 @@ class ScreenEyes:
     def __init__(self, agent: DroidAgent):
         self.agent = agent
 
-    def capture_screenshot(self):
+    async def capture_screenshot(self):
         """
-        Captures screen strictly to RAM via ADB pipe.
-        Stealth Mode: No file is created on the Android device.
+        Captures screen asynchronously.
+        Does not block the event loop while waiting for ADB data transfer.
         """
         try:
-            # 'exec-out' writes binary to stdout, skipping file storage
-            result = subprocess.run(
-                ["adb", "exec-out", "screencap", "-p"], 
-                capture_output=True,
-                timeout=6  # Increased slightly for high-res screens
+            # 1. Start the ADB process asynchronously
+            process = await asyncio.create_subprocess_exec(
+                "adb", "exec-out", "screencap", "-p",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
             )
-            
-            if result.returncode == 0 and result.stdout:
-                image_data = io.BytesIO(result.stdout)
+
+            # 2. Wait for data with a timeout (3 seconds)
+            try:
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=3.0)
+            except asyncio.TimeoutError:
+                print(" [⚠️ ADB Timeout]", end="")
+                try:
+                    process.kill()
+                except: 
+                    pass
+                return None
+
+            if process.returncode == 0 and stdout:
+                image_data = io.BytesIO(stdout)
+                
+                # 3. Open as PIL Image
                 image = Image.open(image_data)
-                # Resize to speed up upload to Gemini (stealthier bandwidth usage)
-                image.thumbnail((1024, 1024)) 
+                
+                # ⚡ HYPER-SPEED OPTIMIZATION ⚡
+                # Resize to 256px. 
+                # This is ~75% smaller than 480px and uploads instantly.
+                image.thumbnail((256, 256)) 
+                
                 return image
-            return None
-        except subprocess.TimeoutExpired:
-            print("⚠️ Camera Timeout (Phone busy or ADB disconnected)")
+                
             return None
         except Exception as e:
-            print(f"❌ Camera Error: {e}")
+            # Silently fail on errors to keep the loop running
             return None
 
     def get_current_app_component(self):
         """
-        Fast, lightweight check for the active app package.
+        Fast check for the active app package.
+        (Kept synchronous as it is very fast and low-overhead)
         """
+        import subprocess # Local import to avoid confusion
         try:
             cmd = "adb shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'"
-            result = subprocess.check_output(cmd, shell=True, timeout=2).decode('utf-8')
+            # Reduced timeout to 0.5s to keep the loop tight
+            result = subprocess.check_output(cmd, shell=True, timeout=0.5).decode('utf-8')
             if "/" in result:
                 tokens = result.split()
                 for token in tokens:
