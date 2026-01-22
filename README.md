@@ -1,3 +1,4 @@
+
 # 🛡️ FocusFlow Pro: AI-Powered Accountability Agent
 
 **FocusFlow Pro** is an **Autonomous Android Agent** that visually monitors your productivity and enforces discipline through social accountability.
@@ -138,3 +139,4 @@ FocusFlow operates on a modular Agentic architecture:
 
 * **Privacy:** Screenshots are processed in **RAM only** and sent to Google's API for analysis. They are not saved to your local hard drive.
 * **Use at your own risk:** This software automates user inputs (taps/swipes). While designed to be safe, the authors are not responsible for accidental messages sent or app interactions.
+
