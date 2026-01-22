@@ -1,0 +1,28 @@
+# --- Security (CRITICAL) ---
+# Ignores your API Keys. NEVER commit this file.
+.env
+
+# --- Python ---
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Virtual Environments ---
+venv/
+.venv/
+env/
+
+# --- DroidRun / Runtime Data ---
+# Ignores the folder where agent logs/screenshots are dumped
+trajectories/
+*.log
+
+# --- IDE Settings ---
+# Ignores VS Code or PyCharm settings
+.vscode/
+.idea/
+
+# --- OS System Files ---
+.DS_Store
+Thumbs.db
