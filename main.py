@@ -18,7 +18,6 @@ async def main():
     # --- 1. SESSION SETUP ---
     print("="*50)
     
-    # 2. HARDCODED GOAL (No user input requested)
     Config.USER_GOAL = "Studying"
     print(f"👉 Task Auto-Set : {Config.USER_GOAL}")
     
@@ -44,24 +43,33 @@ async def main():
     brain = AcademicBrain()
     police = PoliceOfficer(base_agent, resources)
 
-    # --- 🔎 SYSTEM CHECK ---
-    print("🛠️  PERFORMING SYSTEM CHECK...")
+    # --- 🔎 CONNECTION CHECK ONLY (No AI Verdict) ---
+    print("🛠️  TESTING CAMERA CONNECTION...")
     test_shot = await eyes.capture_screenshot()
     if test_shot:
-        print("🧠 Connecting to Brain...")
-        await brain.judge_image(test_shot) 
-        print(f"✅ System Ready.")
+        # We just check if the image object exists to confirm ADB is working
+        # Removed: await brain.judge_image(test_shot) 
+        print(f"✅ Camera Connected Successfully.")
         test_shot.close()
     else:
         print("❌ CRITICAL: Camera Failed. Check ADB Connection.")
-    print("   (Monitoring started...)")
+        return # Exit if camera fails
+
+    print("-" * 50)
+
+    # --- STARTUP COOLDOWN ---
+    print("\n⏳ STARTUP PERIOD: 10 seconds to open your study materials...")
+    for i in range(10, 0, -1):
+        print(f"\r   Starting analysis in {i}s...   ", end="", flush=True)
+        await asyncio.sleep(1)
+    print("\n\n🚀 MONITORING ACTIVE! (Good luck)")
     print("-" * 50)
 
     strike_counter = 0
-    last_smart_check = 0
+    last_smart_check = time.time() # Start timer now so we don't check instantly
     
     while True:
-        # A. FAST CHECKS
+        # A. FAST CHECKS (App Package Names)
         current_component = eyes.get_current_app_component()
         current_package = current_component.split('/')[0] if current_component else ""
         
@@ -95,7 +103,7 @@ async def main():
         elif not is_in_safe_zone and current_package != "" and "launcher" not in current_package:
              pass 
 
-        # B. VISION CHECK
+        # B. VISION CHECK (AI Analysis)
         if not just_punished and (time.time() - last_smart_check > Config.POLLING_RATE_SMART):
             print(".", end="", flush=True) 
             screenshot = await eyes.capture_screenshot()
@@ -117,10 +125,20 @@ async def main():
                 screenshot.close()
             last_smart_check = time.time()
 
+        # --- VISIBLE GRACE PERIOD (No Analysis) ---
         if just_punished:
-            print("\n🛡️  GRACE PERIOD: 8 seconds...")
-            await asyncio.sleep(8)
-            print("👀 Resuming watch.\n")
+            grace_seconds = 8
+            print(f"\n🛡️  GRACE PERIOD ({grace_seconds}s) - GET BACK TO WORK!")
+            
+            # Active countdown loop
+            for i in range(grace_seconds, 0, -1):
+                print(f"\r   ⏳ Resuming in {i}s... ", end="", flush=True)
+                await asyncio.sleep(1)
+            
+            print("\r   👀 RESUMING WATCH!        \n")
+            
+            # Reset timer so we don't snapshot instantly
+            last_smart_check = time.time()
             continue
 
         await asyncio.sleep(Config.POLLING_RATE_FAST)
